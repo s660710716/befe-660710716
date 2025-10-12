@@ -74,7 +74,7 @@ func initDB(){
 }
 
 // @Summary Get all book
-// @Description Get details of a book by ID
+// @Description Get details of a books
 // @Tags Books
 // @Produce  json
 // @Success 200  {object}  Book
@@ -107,14 +107,43 @@ func getAllBooks(c *gin.Context) {
 	c.JSON(http.StatusOK, books)
 }
 
+
+func getNewBook(c *gin.Context) {
+	var rows *sql.Rows
+	var err error
+	// ลูกค้าถาม "มีหนังสืออะไรบ้าง"
+	rows, err = db.Query("SELECT id, title, author, isbn, year, price, created_at, updated_at FROM books order by created_at desc limit 5")
+	if err != nil {
+	    c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	    return
+	}
+	defer rows.Close() // ต้องปิด rows เสมอ เพื่อคืน Connection กลับ pool
+ 
+	var books []Book
+	for rows.Next() {
+	    var book Book
+	    err := rows.Scan(&book.ID, &book.Title, &book.Author, &book.ISBN, &book.Year, &book.Price, &book.CreatedAt, &book.UpdatedAt)
+	    if err != nil {
+		   // handle error
+	    }
+	    books = append(books, book)
+	}
+	 if books == nil {
+		 books = []Book{}
+	 }
+ 
+	 c.JSON(http.StatusOK, books)
+ }
+
 // @Summary Get book by ID
-// @Description Get details of a book by ID
+// @Description Get details of a book by its ID
 // @Tags Books
 // @Produce  json
-// @Param   id   path      int     true  "Book ID"
-// @Success 200  {object}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books/{id} [get]
+// @Param   id   path   int  true  "Book ID"
+// @Success 200 {object} Book
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /books/{id} [get]
 func getBook(c *gin.Context) {
     id := c.Param("id")
     var book Book
@@ -134,17 +163,19 @@ func getBook(c *gin.Context) {
     c.JSON(http.StatusOK, book)
 }
 
-// @Summary Post book
-// @Description post new book
+// @Summary Create a new book
+// @Description Add a new book record to the database
 // @Tags Books
+// @Accept  json
 // @Produce  json
-// @Param   book  body  Book  true  "Book JSON"
-// @Success 200  {object}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books/ [post]
+// @Param   book  body  Book  true  "Book data"
+// @Success 201 {object} Book
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /books [post]
 func createBook(c *gin.Context) {
     var newBook Book
-    
+
     if err := c.ShouldBindJSON(&newBook); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
@@ -173,15 +204,18 @@ func createBook(c *gin.Context) {
     c.JSON(http.StatusCreated, newBook) // ใช้ 201 Created
 }
 
-// @Summary update book by ID
-// @Description update details of a book by ID
+// @Summary Update book by ID
+// @Description Update existing book details by its ID
 // @Tags Books
+// @Accept  json
 // @Produce  json
-// @Param   id   path      int     true  "Book ID"
-// @Param   book  body  Book  true  "Book JSON"
-// @Success 200  {object}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books/{id} [put]
+// @Param   id    path  int   true  "Book ID"
+// @Param   book  body  Book  true  "Updated book data"
+// @Success 200 {object} Book
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /books/{id} [put]
 func updateBook(c *gin.Context) {
     var ID int
     id := c.Param("id")
@@ -215,13 +249,14 @@ func updateBook(c *gin.Context) {
 }
 
 // @Summary Delete book by ID
-// @Description Delete details of a book by ID
+// @Description Delete a book record from the database by its ID
 // @Tags Books
 // @Produce  json
-// @Param   id   path      int     true  "Book ID"
-// @Success 200  {object}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books/{id} [delete]
+// @Param   id  path  int  true  "Book ID"
+// @Success 200 {object} map[string]string
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /books/{id} [delete]
 func deleteBook(c *gin.Context) {
     id := c.Param("id")
 
@@ -248,16 +283,14 @@ func deleteBook(c *gin.Context) {
 // @title           Simple API Example
 // @version         1.0
 // @description     This is a simple example of using Gin with Swagger.
-// @host localhost:8080
-// @host 127.0.0.1:8080
+// @host            localhost:8080
 // @BasePath        /api/v1
 func main(){
 	initDB()
 	defer db.Close()
 
 	r := gin.Default()	
-    r.Use(cors.Default())
-
+	r.Use(cors.Default())
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	r.GET("/health", func(c *gin.Context) {
@@ -272,6 +305,7 @@ func main(){
 	api := r.Group("/api/v1")
 	{
 		api.GET("/books", getAllBooks)
+		api.GET("/books/new", getNewBook)
 	 	api.GET("/books/:id", getBook)
 	 	api.POST("/books", createBook)
 	 	api.PUT("/books/:id", updateBook)
@@ -280,3 +314,7 @@ func main(){
 
 	r.Run(":8080")
 }
+
+
+
+
